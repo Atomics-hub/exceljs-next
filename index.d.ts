@@ -634,7 +634,7 @@ export interface Column {
 	/**
 	 * The cell values in the column
 	 */
-	values: ReadonlyArray<CellValue>;
+	values: CellValue;
 
 	/**
 	 * Column letter key
@@ -1461,7 +1461,42 @@ export interface XlsxReadOptions {
 	/**
 	 * The list of XML node names to ignore while parsing an XLSX file
 	 */
-	ignoreNodes: string[];
+	ignoreNodes?: string[];
+	/**
+	 * [exceljs-hardened] CVE fix — decompression bomb / memory exhaustion
+	 * (CWE-409). Maximum declared uncompressed size (in bytes) allowed for
+	 * any single zip entry before load() refuses to decompress it.
+	 * @default 134217728 (128MB)
+	 */
+	maxEntryUncompressedSize?: number;
+	/**
+	 * [exceljs-hardened] CVE fix — decompression bomb / memory exhaustion
+	 * (CWE-409). Maximum cumulative declared uncompressed size (in bytes)
+	 * allowed across all zip entries before load() refuses to continue.
+	 * @default 536870912 (512MB)
+	 */
+	maxTotalUncompressedSize?: number;
+	/**
+	 * [exceljs-hardened] CVE fix — resource exhaustion (CWE-770). Maximum number of
+	 * cells covered by the merged ranges of a single worksheet before load() refuses
+	 * the file. A whole column (1048576 cells) is allowed by default.
+	 * @default 2097152
+	 */
+	maxMergeCells?: number;
+	/**
+	 * [exceljs-hardened] CVE fix — resource exhaustion (CWE-770). Maximum number of
+	 * cells covered by the data validation ranges (sqref) of a single worksheet
+	 * before load() refuses the file.
+	 * @default 8388608
+	 */
+	maxDataValidationCells?: number;
+	/**
+	 * [exceljs-hardened] CVE fix — resource exhaustion (CWE-770). Maximum number of
+	 * cells covered by the cell ranges of all defined names of a workbook before
+	 * load() refuses the file. A whole column (1048576 cells) is allowed by default.
+	 * @default 2097152
+	 */
+	maxDefinedNameCells?: number;
 }
 
 export interface XlsxWriteOptions extends stream.xlsx.WorkbookWriterOptions {
@@ -1578,6 +1613,14 @@ export interface CsvWriteOptions {
 	map(value: any, index: number): any;
 	includeEmptyRows: boolean;
 	formatterOptions: Partial<FastCsvFormatterOptionsArgs>;
+	/**
+	 * [exceljs-hardened] CVE fix — CSV / formula injection (CWE-1236).
+	 * When true (default false), any value beginning with =, +, -, @, tab,
+	 * or CR is prefixed with a neutralizing apostrophe before being
+	 * written, so it can't be evaluated as a formula by whoever opens the
+	 * export. Note it also rewrites ordinary text such as "+1 555 0100".
+	 */
+	escapeFormulas?: boolean;
 }
 
 export interface Csv {
@@ -1832,6 +1875,11 @@ export interface TableColumnProperties {
 	  * Optional formula for custom functions
 	  */
 	totalsRowFormula?: string;
+
+	/**
+	 * Styles applied to the column
+	 */
+	style?: Partial<Style>;
 }
 
 
@@ -2006,6 +2054,16 @@ export namespace stream {
 			 * @default 'ignore'
 			 */
 			entries?: 'emit' | 'ignore';
+			/**
+			 * [exceljs-hardened] Opt-in (no default: this reader is meant for very large files).
+			 * Maximum REAL decompressed size, in bytes, of any single zip entry.
+			 */
+			maxEntryUncompressedSize?: number;
+			/**
+			 * [exceljs-hardened] Opt-in (no default: this reader is meant for very large files).
+			 * Maximum REAL cumulative decompressed size, in bytes, across all zip entries.
+			 */
+			maxTotalUncompressedSize?: number;
 		}
 
 		class WorkbookReader extends Workbook {
@@ -2032,4 +2090,18 @@ export namespace stream {
 			getColumn(c: number): Column;
 		}
 	}
+}
+
+// [exceljs-hardened] new in this fork — see lib/utils/media-path-guard.js
+export namespace utils {
+	/**
+	 * Resolves userInput against baseDir and throws if the result would
+	 * escape baseDir. Use this instead of Node's path.join() wherever you
+	 * build an addImage({filename}) path from user-influenced input:
+	 * path.join() alone already strips ".." before addImage() ever sees
+	 * the string, so it cannot be safely validated after the fact.
+	 *
+	 * @throws {Error} if userInput resolves outside of baseDir
+	 */
+	function safeJoin(baseDir: string, userInput: string): string;
 }

@@ -26,6 +26,7 @@ module.exports = function(grunt) {
     },
     browserify: {
       options: {
+        ignore: ['zlib'],
         transform: [
           [
             'babelify',
@@ -40,6 +41,8 @@ module.exports = function(grunt) {
           ],
         ],
         browserifyOptions: {
+          // browserify's own stream shim predates async iteration, which the loaders rely on
+          builtins: {...require('browserify/lib/builtins'), stream: require.resolve('readable-stream')},
           // enable source map for browserify
           debug: true,
           standalone: 'ExcelJS',
